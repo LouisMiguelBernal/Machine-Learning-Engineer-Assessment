@@ -1,0 +1,84 @@
+# ---------------------------------------------------------------- Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ------------------------------------------------------- Virtual envs
+.venv/
+venv/
+env/
+ENV/
+
+# ------------------------------------------------------------ Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# ---------------------------------------------------------- Notebooks
+# Checkpoints only. notebooks/*.ipynb IS committed — the walkthrough is a
+# deliverable and its stored outputs are the point of it.
+.ipynb_checkpoints/
+
+# ------------------------------------------------ Regenerable artefacts
+# The fitted model is rebuilt by `python scripts/train.py` in about 30s.
+# Committing a 4 MB binary that goes stale on the next code change is worse
+# than regenerating it.
+artifacts/
+
+# Scratch logs written by the experiment scripts while they run.
+reports/_*.log
+
+# --------------------------------------------------- Assessment sources
+# The raw email attachments, kept locally for provenance. Superseded by
+# data/ (canonical names) and docs/. Excluded so the repo ships the working
+# copies rather than two versions of the same four CSVs.
+# NOTE: tests/test_submission_contract.py pins the vendor score.py and
+# requirements.txt by SHA-256 rather than reading this directory, so vendor
+# integrity is still checked on a fresh clone where this is absent.
+.assessment_original/
+
+# ------------------------------------------------ Credentials and config
+# Nothing here today. Present so a stray local override never becomes a commit.
+.env
+.env.*
+*.pem
+*.key
+credentials.json
+secrets.*
+
+# ------------------------------------------------------- Editors / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ------------------------------------------------------------------- OS
+.DS_Store
+._*
+Thumbs.db
+desktop.ini
+
+# ------------------------------------------------------------ Scratch
+*.bak
+*.tmp
+scratch/
+tmp/
+
+# ---------------------------------------------------------- Deliberately
+# NOT ignored, because they are deliverables the assessment asks for:
+#   validation_predictions.csv
+#   data/*.csv                          (the supplied inputs the code reads)
+#   data/december_chart_inputs.csv      (predicted_rate filled)
+#   scorer_results/candidate_december.png
+#   docs/freight_rate_report.docx
+#   reports/*.md, reports/*.png
+#   notebooks/walkthrough.ipynb
