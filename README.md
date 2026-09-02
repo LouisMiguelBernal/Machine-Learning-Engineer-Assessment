@@ -25,13 +25,6 @@ variance, so the naive rate-per-mile rule already reaches 0.9537 and there is
 little headroom left to win. The comparison worth reading is the error itself:
 $203.69 down to $48.15, or 9.27% down to 2.01%.
 
-> **This figure was corrected downward during review.** An early version of the
-> validation supplied the holdout window a constant market index instead of the
-> real daily series, which flattered the result to $38.94. The model and its
-> predictions never changed; the measurement was wrong. Scored correctly on the
-> same rows it is $48.15. The pipeline now refuses to price any window it has no
-> real index for, and a deliberate mutation proves that guard fires. See
-> *Validation* below and `docs/PROCESS.md`.
 
 ---
 
