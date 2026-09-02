@@ -20,10 +20,18 @@ is the honest number for a scorer that cannot exclude them: its median APE is
 essentially the clean one, so the gap between mean and median is the contamination,
 not the model.
 
-> **An earlier version of this README reported $38.94.** That number was measured
-> with the holdout window's daily market index silently replaced by a constant, a
-> configuration the deployed model never runs in. See *Validation* below and
-> `docs/PROCESS.md`, Reversal 3. The submitted files did not change; the claims did.
+R² is the weakest number in that table, not the strongest. Distance dominates the
+variance, so the naive rate-per-mile rule already reaches 0.9537 and there is
+little headroom left to win. The comparison worth reading is the error itself:
+$203.69 down to $48.15, or 9.27% down to 2.01%.
+
+> **This figure was corrected downward during review.** An early version of the
+> validation supplied the holdout window a constant market index instead of the
+> real daily series, which flattered the result to $38.94. The model and its
+> predictions never changed; the measurement was wrong. Scored correctly on the
+> same rows it is $48.15. The pipeline now refuses to price any window it has no
+> real index for, and a deliberate mutation proves that guard fires. See
+> *Validation* below and `docs/PROCESS.md`.
 
 ---
 
