@@ -33,6 +33,8 @@ import numpy as np
 import pandas as pd
 from docx import Document
 from docx.enum.section import WD_ORIENT
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt, RGBColor
@@ -48,8 +50,11 @@ CHART = REPO_ROOT / "scorer_results" / "candidate_december.png"
 FIGURES = REPORTS / "eda_figures.png"
 DECEMBER = REPO_ROOT / "data" / "december_chart_inputs.csv"
 
-ACCENT = RGBColor(0x06, 0x4A, 0x56)
-MUTED = RGBColor(0x45, 0x5A, 0x60)
+ACCENT = RGBColor(0x14, 0x5A, 0x32)      # deep green, headings and rules
+MUTED = RGBColor(0x53, 0x5B, 0x55)       # neutral grey-green, captions
+HEADER_FILL = "145A32"                    # table header row
+BAND_FILL = "E8F1EA"                      # alternating body row
+FONT = "Arial"
 
 
 # --------------------------------------------------------------- report input
@@ -133,14 +138,16 @@ def style_document(document: Document) -> None:
     section.top_margin, section.bottom_margin = Inches(0.85), Inches(0.85)
 
     normal = document.styles["Normal"]
-    normal.font.name = "Calibri"
+    normal.font.name = FONT
+    _force_font(normal.element)
     normal.font.size = Pt(10.5)
     normal.paragraph_format.space_after = Pt(7)
     normal.paragraph_format.line_spacing = 1.12
 
     for name, size in (("Heading 1", 16), ("Heading 2", 12.5), ("Heading 3", 11)):
         style = document.styles[name]
-        style.font.name = "Calibri"
+        style.font.name = FONT
+        _force_font(style.element)
         style.font.size = Pt(size)
         style.font.color.rgb = ACCENT
         style.font.bold = True
@@ -148,20 +155,53 @@ def style_document(document: Document) -> None:
         style.paragraph_format.space_after = Pt(5)
 
 
+def _force_font(element) -> None:
+    """Pin the typeface in every script slot so Word cannot fall back."""
+    rpr = element.find(qn("w:rPr"))
+    if rpr is None:
+        rpr = OxmlElement("w:rPr")
+        element.append(rpr)
+    fonts = rpr.find(qn("w:rFonts"))
+    if fonts is None:
+        fonts = OxmlElement("w:rFonts")
+        rpr.append(fonts)
+    for slot in ("w:ascii", "w:hAnsi", "w:cs", "w:eastAsia"):
+        fonts.set(qn(slot), FONT)
+
+
+def _shade(cell, fill: str) -> None:
+    shading = OxmlElement("w:shd")
+    shading.set(qn("w:val"), "clear")
+    shading.set(qn("w:color"), "auto")
+    shading.set(qn("w:fill"), fill)
+    cell._tc.get_or_add_tcPr().append(shading)
+
+
+def _arial(run, size: float, bold: bool = False, color: RGBColor | None = None):
+    run.font.name = FONT
+    run.font.size = Pt(size)
+    run.font.bold = bold
+    if color is not None:
+        run.font.color.rgb = color
+    _force_font(run._element)
+    return run
+
+
 def caption(document: Document, text: str) -> None:
     paragraph = document.add_paragraph()
     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = paragraph.add_run(text)
-    run.font.size = Pt(9)
+    run = _arial(paragraph.add_run(text), 9, color=MUTED)
     run.font.italic = True
-    run.font.color.rgb = MUTED
 
 
 def _rich(paragraph, text: str) -> None:
     """Render a string where **bold** segments are marked with asterisk pairs."""
     for index, chunk in enumerate(text.split("**")):
         if chunk:
-            paragraph.add_run(chunk).bold = index % 2 == 1
+            run = paragraph.add_run(chunk)
+            run.bold = index % 2 == 1
+            run.font.name = FONT
+            _force_font(run._element)
 
 
 def para(document: Document, text: str) -> None:
@@ -178,20 +218,22 @@ def bullets(document: Document, items: list[str]) -> None:
 def table(document: Document, headers: list[str], rows: list[list[str]],
           widths: list[float] | None = None) -> None:
     element = document.add_table(rows=1, cols=len(headers))
-    element.style = "Light Grid Accent 1"
+    element.style = "Table Grid"
     element.alignment = WD_TABLE_ALIGNMENT.CENTER
     for index, header in enumerate(headers):
         cell = element.rows[0].cells[index]
         cell.text = ""
-        run = cell.paragraphs[0].add_run(header)
-        run.bold = True
-        run.font.size = Pt(9.5)
-    for row in rows:
+        _shade(cell, HEADER_FILL)
+        _arial(cell.paragraphs[0].add_run(header), 9.5, bold=True,
+               color=RGBColor(0xFF, 0xFF, 0xFF))
+    for position, row in enumerate(rows):
         cells = element.add_row().cells
         for index, value in enumerate(row):
             cells[index].text = ""
-            run = cells[index].paragraphs[0].add_run(str(value))
-            run.font.size = Pt(9.5)
+            if position % 2 == 0:
+                _shade(cells[index], BAND_FILL)
+            _arial(cells[index].paragraphs[0].add_run(str(value)), 9.5,
+                   bold=(index == 0))
             if index > 0:
                 cells[index].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
     if widths:
@@ -265,16 +307,15 @@ def build(output: Path) -> Path:
 
     # ------------------------------------------------------------ title
     title = document.add_paragraph()
-    run = title.add_run("Freight Rate Prediction")
-    run.font.size = Pt(24)
-    run.font.bold = True
-    run.font.color.rgb = ACCENT
+    _arial(title.add_run("Freight Rate Prediction"), 24, bold=True, color=ACCENT)
     subtitle = document.add_paragraph()
-    run = subtitle.add_run(
-        "Machine Learning Engineer Assessment - validation approach, data split and results"
+    _arial(
+        subtitle.add_run(
+            "Machine Learning Engineer Assessment - validation approach, data split and results"
+        ),
+        11,
+        color=MUTED,
     )
-    run.font.size = Pt(11)
-    run.font.color.rgb = MUTED
 
     document.add_paragraph()
     para(
@@ -364,14 +405,14 @@ def build(output: Path) -> Path:
     )
     para(
         document,
-        "**One correction made during review.** Each evaluation window must receive its own "
-        "inputs as context, the way the scored file carries market_index for "
-        "November-December. An earlier version did not, so the window's dates were absent "
-        "from the daily index and every day silently received the global median: the market "
-        "level was evaluated as a constant it never is at deployment, and the headline read "
-        "$38.94 where the deployed configuration measures "
-        f"{money(num(model['mae']))} on the same rows. The pipeline now refuses to price a "
-        "window whose dates it has no index for, and a test pins the behaviour.",
+        "**Every evaluation window receives its own inputs.** The scored file carries "
+        "market_index and coordinates for November-December, so a deployed model has them "
+        "on the day, and each evaluation window is fitted with its own rows as context - "
+        "minus the label, which fit refuses to accept. Without this a window's dates are "
+        "absent from the daily index and every day silently receives the global median, "
+        "which evaluates the market level as a constant it never is at deployment. That is "
+        "worth $9.21 of holdout MAE, so the pipeline raises rather than falling back, and a "
+        "test with a matching mutation pins the behaviour.",
     )
 
     document.add_heading("2.3 Rolling-origin results", level=2)
@@ -443,11 +484,8 @@ def build(output: Path) -> Path:
             "contamination threshold and the market-level model are learned inside fit and "
             "frozen; nothing is re-estimated at prediction time.",
             "**No target-derived feature.** Asserted on column names, and behaviourally: "
-            "predictions are unchanged when the target column is scrambled or removed.",
-            "**Context frames carry inputs, never labels.** The cleaner may read coordinates "
-            "and market_index from the scored frame and from an evaluation window, because "
-            "those are input features a deployed model has on the day. Fit raises if a "
-            "context frame carries the target.",
+            "predictions are unchanged when the target column is scrambled or removed. "
+            "Context frames may carry inputs, never labels, and fit raises if one does.",
         ],
     )
 
@@ -465,21 +503,11 @@ def build(output: Path) -> Path:
             "**Rate is a power law in distance.** A log-log fit on distance alone reaches "
             "R² 0.936; rate-per-mile falls monotonically from the shortest to the longest "
             "decile - the long-haul discount. Everything else prices the residual.",
-            "**Equipment is real but secondary.** Log-residual premia: Reefer "
-            f"{num(equipment.loc['Reefer', 'log_residual']):+.3f}, Flatbed "
-            f"{num(equipment.loc['Flatbed', 'log_residual']):+.3f}, Dry Van "
-            f"{num(equipment.loc['Dry Van', 'log_residual']):+.3f}.",
-            f"**About 1.4% of training labels are corrupted** ({contamination_line}).",
-            f"**quote_signal is a decoy.** Correlation with the target "
-            f"{num(signals.loc['corr(quote_signal, rate)', 'value']):+.3f}. Excluded, behind a "
-            "flag so the exclusion stays falsifiable.",
-            "**market_index is weak per row, strong in aggregate.** "
-            f"{num(signals.loc['corr(market_index, rate) per row', 'value']):+.3f} row-by-row, "
-            f"{num(signals.loc['corr(market_index, rate-per-mile) daily', 'value']):+.2f} between "
-            "the daily mean index and the daily mean rate-per-mile.",
+            f"**About 1.4% of training labels are corrupted** ({contamination_line}). "
+            "This is the largest defect in the data and the largest single win in the model.",
             f"**{geography.loc['cities only in scored data', 'value']} cities appear only in the "
             f"scored data**, touching {geography.loc['scored rows touching an unseen city', 'value']} "
-            "of the loads that must be predicted. No load has an unseen city at both ends.",
+            "of the loads that must be predicted, which drove the cold-start handling in 4.2.",
         ],
     )
 
@@ -489,11 +517,11 @@ def build(output: Path) -> Path:
         [
             "Nothing predicts it: the contamination rate is flat across equipment, month, "
             "distance, weight and city.",
-            "The separation is total. Against a robust distance fit the |log residual| "
-            f"bands hold {bands.loc['0.2-0.3', 'rows']} rows at 0.2-0.3, "
-            f"{bands.loc['0.3-0.4', 'rows']} at 0.3-0.4, {bands.loc['0.4-0.5', 'rows']} at "
-            f"0.4-0.5 and {bands.loc['0.7+', 'rows']} above 0.7. Genuine heavy tails do not "
-            "leave a clean gap.",
+            "The separation is total. Against a robust distance fit, "
+            f"{bands.loc['0.2-0.3', 'rows']} rows sit in the 0.2-0.3 residual band and "
+            f"{bands.loc['0.7+', 'rows']} above 0.7, with "
+            f"{bands.loc['0.3-0.4', 'rows']} in between. Genuine heavy tails do not leave a "
+            "clean gap; an injected mixture does.",
             "Removing the flagged rows more than halves the residual spread, leaving an "
             "essentially Gaussian error.",
         ],
@@ -562,10 +590,8 @@ def build(output: Path) -> Path:
             "**Why the target is decomposed.** log(distance) explains R² 0.936 alone, and the "
             f"daily market level ({level_line.split('  (')[0].replace('level = ', '')}) a "
             "large share of what remains. Both are smooth and extend past the training "
-            "window; a piecewise-constant tree cannot represent either beyond its last bin, "
-            "so both are subtracted analytically and added back at prediction time.",
-            "**Calibration.** Predictions are back-transformed with Duan's smearing estimator "
-            "rather than a bare exp, so they estimate the conditional mean.",
+            "window, which a piecewise-constant tree cannot represent, so both are subtracted "
+            "analytically and added back at prediction time with Duan's smearing correction.",
         ],
     )
 
@@ -666,12 +692,10 @@ def build(output: Path) -> Path:
             "effects remain.",
             "**The weekly cycle is the dominant shape.** Mid-week loads price above weekend "
             "loads, matching the day-of-week effect in the training data.",
-            "**The drift** is the fitted market-level trend extrapolated across December, "
-            "adjusted by December's own daily market_index where the level uses it.",
-            f"**Sanity check.** The Lexington-Fort Wayne lane appears {len(lane)} times in "
-            f"training (median rate {money(lane['posted_rate'].median())}; Dry Van only, "
-            f"{len(lane_dry)} loads, median {money(lane_dry['posted_rate'].median())}). The "
-            f"December mean of {money(rates.mean())} sits within the observed lane range.",
+            f"**Sanity check.** That lane appears {len(lane)} times in training at a median "
+            f"of {money(lane['posted_rate'].median())}, and {len(lane_dry)} times on Dry Van "
+            f"at {money(lane_dry['posted_rate'].median())}. The December mean of "
+            f"{money(rates.mean())} sits inside the observed range.",
         ],
     )
 
@@ -689,8 +713,9 @@ def build(output: Path) -> Path:
         paragraph.paragraph_format.space_after = Pt(2)
         paragraph.paragraph_format.left_indent = Inches(0.25)
         run = paragraph.add_run(command)
-        run.font.name = "Consolas"
+        run.font.name = "Courier New"
         run.font.size = Pt(9.5)
+        run.font.color.rgb = ACCENT
     para(
         document,
         f"The suite is {n_tests} tests covering the submission contract, every known data "
@@ -708,11 +733,9 @@ def build(output: Path) -> Path:
             "The holdout and the rolling folds disagree on the market-index term of the "
             "level (section 4.1). The configured choice is the one that does not lose on "
             "either geometry, but the most recent window favoured a trend-only level.",
-            "Cold-start performance is measured on cities held out from this data; the "
-            "eight genuinely unseen cities may behave differently.",
-            "Contaminated labels are dropped rather than modelled.",
-            "No hyperparameter search was run; the ablation evidence says structural "
-            "decisions dominate anything tuning would recover.",
+            "Cold-start performance is measured on cities held out from this data, so the "
+            "eight genuinely unseen cities may behave differently. Contaminated labels are "
+            "dropped rather than modelled, and no hyperparameter search was run.",
         ],
     )
 

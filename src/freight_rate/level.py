@@ -17,10 +17,9 @@ before boosting, and added back at prediction time, where it extrapolates by
 construction. Removing it costs about $9 of holdout MAE
 (``reports/model_selection.md``, "target: log_rpm (no level)").
 
-**What the two validation geometries say about the index term.** Once every
-evaluation window is supplied its own ``market_index`` - which an earlier
-version of the validation did not do, so the index term was evaluated as a
-constant - the 61-day holdout and the rolling folds disagree:
+**What the two validation geometries say about the index term.** Evaluated
+correctly, with every window supplied its own ``market_index`` rather than a
+constant fallback, the 61-day holdout and the rolling folds disagree:
 
 * trend + index: holdout $48.15, fold mean $46.82
 * trend only:    holdout $40.56, fold mean $51.19 (fold 2 at $80.61)

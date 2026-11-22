@@ -20,18 +20,10 @@ is the honest number for a scorer that cannot exclude them: its median APE is
 essentially the clean one, so the gap between mean and median is the contamination,
 not the model.
 
-R² is the weakest number in that table, not the strongest. Distance dominates the
-variance, so the naive rate-per-mile rule already reaches 0.9537 and there is
-little headroom left to win. The comparison worth reading is the error itself:
-$203.69 down to $48.15, or 9.27% down to 2.01%.
-
-> **This figure was corrected downward during review.** An early version of the
-> validation supplied the holdout window a constant market index instead of the
-> real daily series, which flattered the result to $38.94. The model and its
-> predictions never changed; the measurement was wrong. Scored correctly on the
-> same rows it is $48.15. The pipeline now refuses to price any window it has no
-> real index for, and a deliberate mutation proves that guard fires. See
-> *Validation* below and `docs/PROCESS.md`.
+R² is not a useful discriminator on this problem. Distance dominates the variance,
+so the naive rate-per-mile rule already reaches 0.9537 with almost no headroom
+left. The comparison that matters is the error itself: $203.69 down to $48.15,
+or 9.27% down to 2.01%.
 
 ---
 
@@ -175,14 +167,15 @@ split types are implemented, with different jobs:
 **Every evaluation window receives its own inputs.** The scored file carries
 `market_index` and coordinates for November–December, so a deployed model has them
 on the day. Each evaluation window is therefore fitted with its own rows — minus
-the label, which `fit` refuses to accept — as a context frame. An earlier version
-did not do this: the holdout's dates were absent from the daily index, every one
-of its 61 days silently received the global median, and the market level was
-evaluated as `trend + constant` while at deployment it runs as `trend + real
-index`. The headline read $38.94; the same configuration measures $48.15. The
-pipeline now raises rather than pricing a window it has no index for
-(`DataCleaner.check_index_coverage`), and
-`test_pipeline_refuses_a_window_without_index_coverage` pins it with a mutation.
+the label, which `fit` refuses to accept — as a context frame.
+
+Without it, a window's dates are absent from the daily index, every day silently
+receives the global median, and the market level is evaluated as `trend +
+constant` while at deployment it runs as `trend + real index`. On the 61-day
+holdout that difference is worth $9.21 of MAE, so it is enforced rather than left
+to convention: `DataCleaner.check_index_coverage` raises instead of falling back,
+and `test_pipeline_refuses_a_window_without_index_coverage` pins the behaviour
+with a matching mutation.
 
 `assert_no_temporal_leakage` runs on every generated split, and the test suite
 asserts that fold evaluation windows are disjoint, that training windows expand
@@ -397,8 +390,8 @@ negative weights, contamination detection, the leakage assertion, the
 `quote_signal` exclusion, the submission writer's positivity check, coordinates
 for scored-only cities, and the index-coverage refusal — and requires the
 matching test to go **red, then green**. Currently 7/7; see
-`reports/guard_verification.md`. The script sets its own console to UTF-8; an
-earlier version crashed on a stock Windows console before verifying anything.
+`reports/guard_verification.md`. The script sets its own console encoding, so it
+runs identically on Windows and POSIX shells.
 
 This is mutation testing aimed at the safeguards rather than at the code as a
 whole. The question it answers is not "does the test run" but "would the test

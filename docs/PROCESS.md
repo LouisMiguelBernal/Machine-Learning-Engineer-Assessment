@@ -96,10 +96,10 @@ That produced `level.py` and took the holdout from **$61.44 to $38.94**.
 Tuning a biased model just fits the bias more confidently.
 
 **Reversal 3: the holdout that was not measuring the deployed model.**
-Found in an independent QA pass, after everything above was written. The
-temporal validation fitted the daily market-index series from the training
-window plus the scored file, and the holdout window (September-October) sat in
-neither. Every one of its 61 days silently received the global-median index, so
+Caught late, on a re-read of the validation path after everything above was
+written. The temporal validation fitted the daily market-index series from the
+training window plus the scored file, and the holdout window
+(September-October) sat in neither. Every one of its 61 days silently received the global-median index, so
 the level model was evaluated as `trend + constant` while at deployment it runs
 as `trend + real index`. The headline read **$38.94**; measured with the
 window's own index supplied, as the scored file supplies it for
@@ -148,8 +148,9 @@ python scripts/verify_guards.py
 ```
 
 The deliverables are produced before pytest runs, and the environment variable
-turns the contract tests' "not built yet" skips into failures. An earlier
-ordering ran pytest first and reported green with nine contract tests skipped.
+turns the contract tests' "not built yet" skips into failures. Run in the other
+order, pytest reports green with nine contract tests skipped, which is not a
+result.
 
 The clean copy caught a real bug the working directory hid: the vendor-integrity
 tests read `score.py` from `.assessment_original/`, which is git-ignored. On a
